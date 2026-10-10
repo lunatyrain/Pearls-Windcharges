@@ -12,6 +12,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.help.HelpTopic;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
@@ -29,6 +30,8 @@ public final class PearlWindChargeControlPlugin extends JavaPlugin implements Li
         infinitePearlKey = new NamespacedKey(this, "infinite_pearl");
         infiniteWindKey = new NamespacedKey(this, "infinite_wind_charge");
         saveDefaultConfig();
+        // Makes "/help pw" work (the /pwhelp command stays as a backup)
+        Bukkit.getHelpMap().addTopic(new PwHelpTopic(this));
         getServer().getPluginManager().registerEvents(this, this);
     }
 
@@ -95,9 +98,33 @@ public final class PearlWindChargeControlPlugin extends JavaPlugin implements Li
         target.getInventory().addItem(item);
     }
 
+    private void sendHelp(CommandSender sender) {
+        sender.sendMessage(Component.text("--- PearlWindChargeControl ---", NamedTextColor.GOLD));
+        boolean any = false;
+        if (sender.hasPermission("pearlwindchargecontrol.toggle")) {
+            any = true;
+            sender.sendMessage(Component.text("/toggleitem <pearls|windcharges> [on|off]", NamedTextColor.YELLOW)
+                    .append(Component.text(" - enable/disable normal pearls or wind charges for players", NamedTextColor.GRAY)));
+            sender.sendMessage(Component.text("Currently: pearls " + (getConfig().getBoolean("pearls-enabled", true) ? "ON" : "OFF")
+                    + ", wind charges " + (getConfig().getBoolean("windcharges-enabled", true) ? "ON" : "OFF"), NamedTextColor.AQUA));
+        }
+        if (sender.hasPermission("pearlwindchargecontrol.give")) {
+            any = true;
+            sender.sendMessage(Component.text("/infinitepearl [player]", NamedTextColor.YELLOW)
+                    .append(Component.text(" - give an Infinite Pearl", NamedTextColor.GRAY)));
+            sender.sendMessage(Component.text("/infinitewindcharge [player]", NamedTextColor.YELLOW)
+                    .append(Component.text(" - give an Infinite Wind Charge", NamedTextColor.GRAY)));
+        }
+        if (!any) {
+            sender.sendMessage(Component.text("You don't have access to any commands from this plugin.", NamedTextColor.GRAY));
+        }
+        sender.sendMessage(Component.text("Infinite items always work, even when the normal ones are disabled.", NamedTextColor.GRAY));
+    }
+
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
         switch (cmd.getName().toLowerCase()) {
+            case "pwhelp" -> sendHelp(sender);
             case "infinitepearl" -> give(sender, args, createInfinitePearl(), "Usage: /infinitepearl [player]");
             case "infinitewindcharge" -> give(sender, args, createInfiniteWindCharge(), "Usage: /infinitewindcharge [player]");
             case "toggleitem" -> {
@@ -134,5 +161,47 @@ public final class PearlWindChargeControlPlugin extends JavaPlugin implements Li
             if (args.length == 2) return List.of("on", "off");
         }
         return List.of();
+    }
+
+    /** Plain-text version of the help, filtered by the viewer's permissions. */
+    String helpText(CommandSender sender) {
+        StringBuilder sb = new StringBuilder();
+        boolean any = false;
+        if (sender.hasPermission("pearlwindchargecontrol.toggle")) {
+            any = true;
+            sb.append("\u00a7e/toggleitem <pearls|windcharges> [on|off]\u00a77 - enable/disable normal pearls or wind charges for players\n");
+            sb.append("\u00a7bCurrently: pearls ").append(getConfig().getBoolean("pearls-enabled", true) ? "ON" : "OFF")
+                    .append(", wind charges ").append(getConfig().getBoolean("windcharges-enabled", true) ? "ON" : "OFF").append("\n");
+        }
+        if (sender.hasPermission("pearlwindchargecontrol.give")) {
+            any = true;
+            sb.append("\u00a7e/infinitepearl [player]\u00a77 - give an Infinite Pearl\n");
+            sb.append("\u00a7e/infinitewindcharge [player]\u00a77 - give an Infinite Wind Charge\n");
+        }
+        if (!any) sb.append("\u00a77You don't have access to any commands from this plugin.\n");
+        sb.append("\u00a77Infinite items always work, even when the normal ones are disabled.");
+        return sb.toString();
+    }
+
+    /** Registers the "pw" topic so /help pw shows this plugin's commands. */
+    private static final class PwHelpTopic extends HelpTopic {
+        private final PearlWindChargeControlPlugin plugin;
+
+        PwHelpTopic(PearlWindChargeControlPlugin plugin) {
+            this.plugin = plugin;
+            this.name = "pw";
+            this.shortText = "PearlWindChargeControl commands";
+            this.fullText = "PearlWindChargeControl commands";
+        }
+
+        @Override
+        public boolean canSee(CommandSender sender) {
+            return true;
+        }
+
+        @Override
+        public String getFullText(CommandSender forWho) {
+            return "\u00a76--- PearlWindChargeControl ---\n" + plugin.helpText(forWho);
+        }
     }
 }

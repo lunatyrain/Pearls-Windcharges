@@ -12,9 +12,11 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.help.HelpTopic;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.components.UseCooldownComponent;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -53,9 +55,32 @@ public final class PearlWindChargeControlPlugin extends JavaPlugin implements Li
     }
 
     public ItemStack createInfinitePearl() {
-        return createInfiniteItem(Material.ENDER_PEARL,
+        ItemStack item = createInfiniteItem(Material.ENDER_PEARL,
                 "<!italic><gradient:#9B5DE5:#00F5D4>Infinite Pearl</gradient>",
                 "A pearl that never runs out.", infinitePearlKey);
+        applyCooldown(item);
+        return item;
+    }
+
+    /** Own cooldown group, so it doesn't put normal pearls on cooldown (and vice versa). */
+    private void applyCooldown(ItemStack item) {
+        ItemMeta meta = item.getItemMeta();
+        UseCooldownComponent cooldown = meta.getUseCooldown();
+        cooldown.setCooldownSeconds((float) getConfig().getDouble("infinite-pearl-cooldown-seconds", 30.0));
+        cooldown.setCooldownGroup(new NamespacedKey(this, "infinite_pearl_cooldown"));
+        meta.setUseCooldown(cooldown);
+        item.setItemMeta(meta);
+    }
+
+    /** Updates the cooldown on any Infinite Pearls in a player's inventory. */
+    private void refreshPearls(Player player) {
+        for (int i = 0; i < player.getInventory().getSize(); i++) {
+            ItemStack item = player.getInventory().getItem(i);
+            if (hasMarker(item, infinitePearlKey)) {
+                applyCooldown(item);
+                player.getInventory().setItem(i, item);
+            }
+        }
     }
 
     public ItemStack createInfiniteWindCharge() {
@@ -87,6 +112,11 @@ public final class PearlWindChargeControlPlugin extends JavaPlugin implements Li
         }
     }
 
+    @EventHandler
+    public void onJoin(PlayerJoinEvent e) {
+        refreshPearls(e.getPlayer());
+    }
+
     private void give(CommandSender sender, String[] args, ItemStack item, String usage) {
         Player target = null;
         if (args.length > 0) target = Bukkit.getPlayer(args[0]);
@@ -108,6 +138,12 @@ public final class PearlWindChargeControlPlugin extends JavaPlugin implements Li
             sender.sendMessage(Component.text("Currently: pearls " + (getConfig().getBoolean("pearls-enabled", true) ? "ON" : "OFF")
                     + ", wind charges " + (getConfig().getBoolean("windcharges-enabled", true) ? "ON" : "OFF"), NamedTextColor.AQUA));
         }
+        if (sender.hasPermission("pearlwindchargecontrol.cooldown")) {
+            any = true;
+            sender.sendMessage(Component.text("/pearlcooldown <seconds>", NamedTextColor.YELLOW)
+                    .append(Component.text(" - set the Infinite Pearl cooldown (now "
+                            + getConfig().getDouble("infinite-pearl-cooldown-seconds", 30.0) + "s)", NamedTextColor.GRAY)));
+        }
         if (sender.hasPermission("pearlwindchargecontrol.give")) {
             any = true;
             sender.sendMessage(Component.text("/infinitepearl [player]", NamedTextColor.YELLOW)
@@ -125,6 +161,28 @@ public final class PearlWindChargeControlPlugin extends JavaPlugin implements Li
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
         switch (cmd.getName().toLowerCase()) {
             case "pwhelp" -> sendHelp(sender);
+            case "pearlcooldown" -> {
+                double current = getConfig().getDouble("infinite-pearl-cooldown-seconds", 30.0);
+                if (args.length < 1) {
+                    sender.sendMessage("Infinite Pearl cooldown is " + current + " seconds. Usage: /pearlcooldown <seconds>");
+                    return true;
+                }
+                double seconds;
+                try {
+                    seconds = Double.parseDouble(args[0]);
+                } catch (NumberFormatException ex) {
+                    sender.sendMessage("Usage: /pearlcooldown <seconds>");
+                    return true;
+                }
+                if (seconds < 1 || seconds > 3600) {
+                    sender.sendMessage("Cooldown must be between 1 and 3600 seconds.");
+                    return true;
+                }
+                getConfig().set("infinite-pearl-cooldown-seconds", seconds);
+                saveConfig();
+                for (Player online : Bukkit.getOnlinePlayers()) refreshPearls(online);
+                sender.sendMessage("Infinite Pearl cooldown is now " + seconds + " seconds.");
+            }
             case "infinitepearl" -> give(sender, args, createInfinitePearl(), "Usage: /infinitepearl [player]");
             case "infinitewindcharge" -> give(sender, args, createInfiniteWindCharge(), "Usage: /infinitewindcharge [player]");
             case "toggleitem" -> {
@@ -160,6 +218,9 @@ public final class PearlWindChargeControlPlugin extends JavaPlugin implements Li
             if (args.length == 1) return List.of("pearls", "windcharges");
             if (args.length == 2) return List.of("on", "off");
         }
+        if (cmd.getName().equalsIgnoreCase("pearlcooldown") && args.length == 1) {
+            return List.of("30");
+        }
         return List.of();
     }
 
@@ -172,6 +233,11 @@ public final class PearlWindChargeControlPlugin extends JavaPlugin implements Li
             sb.append("\u00a7e/toggleitem <pearls|windcharges> [on|off]\u00a77 - enable/disable normal pearls or wind charges for players\n");
             sb.append("\u00a7bCurrently: pearls ").append(getConfig().getBoolean("pearls-enabled", true) ? "ON" : "OFF")
                     .append(", wind charges ").append(getConfig().getBoolean("windcharges-enabled", true) ? "ON" : "OFF").append("\n");
+        }
+        if (sender.hasPermission("pearlwindchargecontrol.cooldown")) {
+            any = true;
+            sb.append("\u00a7e/pearlcooldown <seconds>\u00a77 - set the Infinite Pearl cooldown (now ")
+                    .append(getConfig().getDouble("infinite-pearl-cooldown-seconds", 30.0)).append("s)\n");
         }
         if (sender.hasPermission("pearlwindchargecontrol.give")) {
             any = true;

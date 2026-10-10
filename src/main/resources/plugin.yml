@@ -4,10 +4,18 @@ main: dev.pearlwindchargecontrol.PearlWindChargeControlPlugin
 api-version: "26.2"
 description: Toggle normal ender pearls and wind charges, plus infinite pearl and infinite wind charge items.
 commands:
+  pwhelp:
+    description: Show PearlWindChargeControl commands
+    usage: /pwhelp
+    aliases: [pwcchelp]
   toggleitem:
     description: Enable or disable normal ender pearls / wind charges for players
     usage: /toggleitem <pearls|windcharges> [on|off]
     permission: pearlwindchargecontrol.toggle
+  pearlcooldown:
+    description: Set the Infinite Pearl cooldown in seconds
+    usage: /pearlcooldown <seconds>
+    permission: pearlwindchargecontrol.cooldown
   infinitepearl:
     description: Give yourself (or a player) an Infinite Pearl
     usage: /infinitepearl [player]
@@ -17,6 +25,8 @@ commands:
     usage: /infinitewindcharge [player]
     permission: pearlwindchargecontrol.give
 permissions:
+  pearlwindchargecontrol.cooldown:
+    default: op
   pearlwindchargecontrol.toggle:
     default: op
   pearlwindchargecontrol.give:
